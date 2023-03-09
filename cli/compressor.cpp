@@ -194,8 +194,8 @@ int decompress(wchar_t* compressionResultPath, FILE* upkFHandle, UE_header* ueHe
 
 				if (
 					(ueHeader->nCompressedHeaders == 0) 
-					|| (ics < 0) 
-					|| (ueHeader->nCompressedHeaders < ics)
+						|| (ics < 0) 
+						|| (ueHeader->nCompressedHeaders < ics)
 				) {
 					nextCMPH_C = NULL;
 				}

@@ -76,10 +76,47 @@ int ReadExportTable(FILE* upkFHandle, UE_header* ueHeader) {
         //printf("fuckyAlloc => %x | %x -> %x\n", (uint)-((int)(tableSize >> 0x20 != 0)), (uint)tableSize, newLen);
 
         if (ueHeader->packageFileVersion == 805) {
-            crashTODO("PackageFileFormat 805 not done");
+            int i = 0;
+            while (i < ueHeader->exportCount) {
+                ueHeader->FXExportTable[i].nSubExports = 5;
+
+                ulonglong subTablesSize = (ulonglong)(ueHeader->FXExportTable[i].nSubExports) * sizeof(UE_subExport);
+                uint newSubLen = (uint)(-(int)(subTablesSize >> 0x20 != 0)) | (uint)subTablesSize;
+
+                UE_subExport* newSubDat = (UE_subExport*)thmalloc(newSubLen);
+                ueHeader->FXExportTable[i].subExports = newSubDat;
+
+                fread(ueHeader->FXExportTable[i].subExports, 4, ueHeader->FXExportTable[i].nSubExports, upkFHandle);
+                ueHeader->FXExportTable[i].unpackedSize = ueHeader->FXExportTable[i].idkX24;
+                ueHeader->FXExportTable[i].beginOfPkgInfoData = ueHeader->FXExportTable[i].idkX28;
+
+                i += 1;
+            }
         }
         else if (ueHeader->packageFileVersion < 537) {
-            crashTODO("PackageFileFormat < 537 not done");
+            int i = 0;
+            while (i < ueHeader->exportCount) {
+                fread(&ueHeader->FXExportTable[i], 0x34, 1, upkFHandle); //0x34 (52) bytes = real upk data
+                ueHeader->FXExportTable[i].nSubExports = 5;
+                int idkX28 = ueHeader->FXExportTable[i].idkX28;
+                if (idkX28 != 0) {
+                    ueHeader->FXExportTable[i].nSubExports += idkX28 * 3;
+                }
+                if (ueHeader->FXExportTable[i].idkX30 != 0 && ueHeader->FXExportTable[i].idkX28 != 0) {
+                    ueHeader->FXExportTable[i].nSubExports += ueHeader->FXExportTable[i].idkX30;
+                }
+                ulonglong subTablesSize = (ulonglong)(ueHeader->FXExportTable[i].nSubExports) * sizeof(UE_subExport);
+                uint newSubLen = (uint)(-(int)(subTablesSize >> 0x20 != 0)) | (uint)subTablesSize;
+
+                UE_subExport* newSubDat = (UE_subExport*)thmalloc(newSubLen);
+                ueHeader->FXExportTable[i].subExports = newSubDat;
+
+                fread(ueHeader->FXExportTable[i].subExports, 4, ueHeader->FXExportTable[i].nSubExports, upkFHandle);
+                ueHeader->FXExportTable[i].unpackedSize = ueHeader->FXExportTable[i].idkX20;
+                ueHeader->FXExportTable[i].beginOfPkgInfoData = ueHeader->FXExportTable[i].idkX24;
+
+                i += 1;
+            }
         }
         else {
             int i = 0;
@@ -89,7 +126,6 @@ int ReadExportTable(FILE* upkFHandle, UE_header* ueHeader) {
                 ueHeader->FXExportTable[i].nSubExports += ueHeader->FXExportTable[i].idkX2c;
 
                 ulonglong subTablesSize = (ulonglong)(ueHeader->FXExportTable[i].nSubExports) * sizeof(UE_subExport);
-
                 uint newSubLen = (uint)(-(int)(subTablesSize >> 0x20 != 0)) | (uint)subTablesSize;
 
                 UE_subExport* newSubDat = (UE_subExport*)thmalloc(newSubLen); 
@@ -152,7 +188,8 @@ void writePKGInfo(UE_header* ueHeader, FILE* pkgInfoFHandle) {
         if (ueHeader->exportCount != 0) {
             do {
                 if (ueHeader->packageFileVersion == 805) {
-                    crashTODO("Version 805 does not work");
+                    ueHeader->FXExportTable[eti].idkX24 = ueHeader->FXExportTable[eti].unpackedSize;
+                    ueHeader->FXExportTable[eti].idkX28 = ueHeader->FXExportTable[eti].beginOfPkgInfoData;
                 }
                 else {
                     ueHeader->FXExportTable[eti].idkX20 = ueHeader->FXExportTable[eti].unpackedSize;
@@ -182,10 +219,10 @@ void makePKGInfo(UE_header* ueHeader) {
 
 char* negativeClassNameGetter(UE_header* ueHeader, int invertClassNum) {
     if (
-        (ueHeader->importCount != 0
+        (ueHeader->importCount != 0 
             && invertClassNum > -1)
             && (uint)invertClassNum <= ueHeader->importCount
-    ){
+    ) {
         int idk = ueHeader->FXImportTable[invertClassNum].bonus2;
         if (
             ueHeader->nameCount != 0 
@@ -380,11 +417,11 @@ void logExportTable(UE_header* ueHeader) {
         getNonOverlappingNameExport(ueHeader, ii, ARRAY_ARG(ETRet));
         fprintf(logf, "%d %s Size:%08x Offset:%08x ", ii, ETRet, currET->unpackedSize, currET->beginOfPkgInfoData);
         fprintf(logf, "%03d %03d %03d %03d %08x", currET->iclass, currET->super, currET->outer, currET->nameNTindex, currET->nOverlapping);
-        fprintf(logf, "%08x %08x %08x %08x %08x %08x %08x %08x",
-            *(int*)&currET->flags1, *(int*)&currET->flags2,
-            *(int*)&currET->serialSize, *(int*)&currET->idkX20,
-            *(int*)&currET->idkX24, *(int*)&currET->idkX28,
-            *(int*)&currET->idkX2c, *(int*)&currET->idkX30
+        fprintf(logf, "%08x %08x %08x %08x %08x %08x %08x %08x"
+            , *(int*)&currET->flags1, *(int*)&currET->flags2
+            , *(int*)&currET->serialSize, *(int*)&currET->idkX20
+            , *(int*)&currET->idkX24, *(int*)&currET->idkX28
+            , *(int*)&currET->idkX2c, *(int*)&currET->idkX30
         );
 
         for (int j = 0; j < currET->nSubExports; j++) {
